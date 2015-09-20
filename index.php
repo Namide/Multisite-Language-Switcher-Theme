@@ -1,48 +1,94 @@
 <?php
 /**
  * index.php for Multisite Language Switcher Theme.
- * v1.0 by oncleben31
+ * v1.1 by oncleben31 and Namide
  * 
- * Description: This theme redirect users from "/" to "/fr/" or "/en/" in function of the languages accepted by the browser
+ * Description: This theme redirect users to the languages accepted by the browser
  * The Theme redirect the 404 error page too.
- * This theme is a quick and dirty hack for my multilingual blog (oncleben31.cc). I don't have any competency in Theme development. 
- * Don't hesitate to improve it.
- *
- * TODO:
- * - use theme option to set the languages
- * - don't use only the prefered language ($Langue[0]), use the others.
+ * This theme is a quick and dirty hack.
+ * You must install the plugin Multisite Language Switcher to use it.
  */
 
-/* Get Prefered language of the browser */
-if (!isset($Langue)) {
-	$Langue = explode(',',$_SERVER['HTTP_ACCEPT_LANGUAGE']);
-	$Langue = strtolower(substr(chop($Langue[0]),0,2));
-}
 
-
-/* Check if the visitor requests the root of you multisite blog (ie "/")
- * In this case, the visitor is redirected to the language specific home depending of the language 
- * Change /fr/ and /en/ by the name of your subsites */
-if ($_SERVER['REQUEST_URI'] == "/") {
-	if ($Langue == "fr") {
-		header("Location: /fr/");
-	}	
-	else {
-		header("Location: /en/");
-	}
-}
-else 
-/* 404 error catch: if the user requests somthing else and not direclty en language specific subsite, the visitor is rediredcted to a 
- * language specific 404 error page.
- * The trick is to redirect to a page which doesn't exist on your blogs. */
+/*
+ * Get Prefered language of the browser
+ */
+if (!isset($lang))
 {
-	if ($Langue == "fr") {
-		header("Location: /fr/erreur404"); /* Call a page that doesn't exist on my french site */
-	}	
-	else {
-		header("Location: /en/404error"); /* Call a page that doesn't exist on my english site */
+	$acceptedLanguages = filter_var($_SERVER['HTTP_ACCEPT_LANGUAGE'], FILTER_SANITIZE_STRING);
+	$lang = explode(',',$acceptedLanguages);
+	$lang = strtolower(substr(chop($lang[0]),0,2));
+}
+if (!isset($req))
+{
+	$req = filter_var($_SERVER['REQUEST_URI'], FILTER_SANITIZE_STRING);
+}
+
+
+/**
+ * List of the sites URL by languages
+ */
+$sites = array();
+foreach ( MslsBlogCollection::instance()->get_objects() as $key => $blog ) {
+	
+	if ( get_blog_details()->blog_id  !=  $key  )
+	{
+		$lg = $blog->get_alpha2();
+		if (isset($sites[$lg]))
+		{
+			echo 'Language ' . $lg . ' has multiples solutions, please fix that';
+			exit();
+		}
+		$sites[$lg] = get_blog_details($key)->path;
 	}
 }
-/* End of the Hack */
 
-?>
+
+/**
+ * Run redirection
+ * 
+ * @param string $lang		Current language
+ * @param string $req		Current path
+ * @param array $sites		List of others sites
+ */
+function redirectTo( $lang, $req, &$sites )
+{
+	if ( $req == get_blog_details()->path )
+	{
+		header('Location: '.$sites[$lang]);
+	}
+	else
+	{
+		header('Location: '.$sites[$lang].'404error');
+	}
+}
+
+
+/**
+ * Redirect to equivalent of the navigator language
+ */
+if (isset($sites[$lang]))
+{
+	redirectTo( $lang, $req, $sites );
+}
+/**
+ * Redirect to the english page
+ */
+else if (isset($sites['en']))
+{
+	redirectTo( 'en', $req, $sites );
+}
+/**
+ * Redirect to the first site
+ */
+else if (count($sites) > 0)
+{
+	redirectTo(array_keys($sites)[0], $req, $sites );
+}
+/**
+ * No sites founds
+ */
+else
+{
+	echo 'configure languages of your website: configure Multisite Language Switcher';
+}
